@@ -1,0 +1,349 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Components.Forms
+@using Telerik.Blazor.Components
+@using System.Linq
+@using System.Collections.Generic
+
+
+<h3>Portfolio</h3>
+
+@if (selectedStock != null && selectedStockPerformance != null)
+{
+    <TelerikStockChart Width="80%"
+                       Height="800px"
+                       DateField="@nameof(StockPerformance.Date)" @ref="@StockChartReference">
+        <StockChartTitle Text="@($"{selectedStock.StockName} Stock Performance")"></StockChartTitle>
+        <StockChartTooltip Visible="true"></StockChartTooltip>
+
+        <StockChartSeriesItems>
+            <StockChartSeries Type="StockChartSeriesType.Candlestick"
+                              Data="@selectedStockPerformance"
+                              OpenField="@nameof(StockPerformance.Open)"
+                              CloseField="@nameof(StockPerformance.Close)"
+                              HighField="@nameof(StockPerformance.High)"
+                              LowField="@nameof(StockPerformance.Low)"
+                              DownColor="red" Color="black">
+            </StockChartSeries>
+        </StockChartSeriesItems>
+
+       <StockChartNavigator>
+            <StockChartNavigatorCategoryAxis>
+                <StockChartNavigatorCategoryAxisLabels Format="{0:d}">
+                    <StockChartNavigatorCategoryAxisLabelsRotation Angle="45" Align="ChartAxisLabelsRotationAlignment.Center"></StockChartNavigatorCategoryAxisLabelsRotation>
+                </StockChartNavigatorCategoryAxisLabels>
+            </StockChartNavigatorCategoryAxis>
+            <StockChartNavigatorSeriesItems>
+                <StockChartNavigatorSeries Type="StockChartSeriesType.Area"
+                                           Data="@selectedStockPerformance"
+                                           Field="@nameof(StockPerformance.Close)">
+                </StockChartNavigatorSeries>
+            </StockChartNavigatorSeriesItems>
+
+            <StockChartNavigatorSelect From="@(new DateTime(2024, 07, 26))" To="@(new DateTime(2024, 10, 24))">
+            </StockChartNavigatorSelect>
+        </StockChartNavigator> 
+
+        <StockChartCategoryAxes>
+            <StockChartCategoryAxis>
+                <StockChartCategoryAxisLabels Template="#= value.toLocaleDateString('en-US') #">
+                    <StockChartCategoryAxisLabelsRotation Angle="0" Align="ChartAxisLabelsRotationAlignment.Center"></StockChartCategoryAxisLabelsRotation>
+                </StockChartCategoryAxisLabels>
+            </StockChartCategoryAxis>
+        </StockChartCategoryAxes>
+
+        <StockChartValueAxes>
+            <StockChartValueAxis>
+                <StockChartValueAxisLabels Format="{0:C3}">
+                    <StockChartValueAxisLabelsRotation Angle="0" Align="ChartAxisLabelsRotationAlignment.Center"></StockChartValueAxisLabelsRotation>
+                </StockChartValueAxisLabels>
+                <StockChartValueAxisPlotBands>
+                    <StockChartValueAxisPlotBand From="34" To="39" Color="#00cc00" Opacity="0.3"></StockChartValueAxisPlotBand>
+                </StockChartValueAxisPlotBands>
+            </StockChartValueAxis>
+        </StockChartValueAxes>
+    </TelerikStockChart>
+
+
+
+
+    
+}
+else
+{
+    <p>Select a stock to view its performance.</p>
+}
+
+<h3>Portfolio</h3>
+<TelerikButton ThemeColor="@(ThemeConstants.Button.ThemeColor.Primary)" OnClick="OpenModal">+ Add Holding</TelerikButton>
+<TelerikGrid Data="@portfolioData" Pageable="true" Sortable="true"
+             OnRowClick="OnRowClickHandler">
+    <GridColumns>
+        <GridColumn Field="StockName" Title="Stock Name" />
+        <GridColumn Field="Quantity" Title="Quantity" />
+        <GridColumn Field="Price" Title="Price" DisplayFormat="{0:C}" />
+        <GridColumn Field="Change" Title="Change (%)" DisplayFormat="{0:P2}" />
+        <GridCommandColumn>
+                <GridCommandButton Command="Edit" OnClick="@(() => OpenEditModal((Stock)context))">Edit</GridCommandButton>
+            <GridCommandButton Command="Delete">Delete</GridCommandButton>
+        </GridCommandColumn>
+    </GridColumns>
+</TelerikGrid>
+
+<!-- Modal for Adding/Editing Holding -->
+@if (showAddModal)
+{
+    <TelerikDialog @bind-Visible="showAddModal" Width="400px" Height="300px" Title="Add Holding">
+        <DialogContent>
+            <EditForm Model="newStock">
+                <div class="form-group">
+                    <div class="input-group">
+                        <label for="stockName">Stock Name</label>
+                        <InputText id="stockName" class="form-control" @bind-Value="newStock.StockName" />
+                    </div>
+
+                    <div class="input-group">
+                        <label for="quantity">Quantity</label>
+                        <InputNumber id="quantity" class="form-control" @bind-Value="newStock.Quantity" TValue="int" />
+                    </div>
+                </div>
+            </EditForm>
+        </DialogContent>
+        <DialogButtons>
+            <div class="dialog-buttons">
+                <TelerikButton OnClick="CloseWindow">Cancel</TelerikButton>
+                <TelerikButton ThemeColor="@(ThemeConstants.Button.ThemeColor.Primary)" OnClick="AddHolding">Submit</TelerikButton>
+            </div>
+        </DialogButtons>
+    </TelerikDialog>
+}
+
+<style>
+    .form-group {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    .input-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    label {
+        margin-bottom: 0.5rem;
+        font-weight: bold;
+    }
+
+    .dialog-buttons {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+    }
+
+        .dialog-buttons telerik-button {
+            margin-right: 0.5rem;
+        }
+</style>
+
+@code {
+    private TelerikStockChart StockChartReference;
+    private bool showAddModal = false; // Controls visibility of the modal
+    private bool isEditMode = false;   // Controls whether we are in edit or add mode
+    private Stock editingStock = null; // Stores the stock being edited
+
+    // Temporary storage for new stock and performance details
+    private Stock newStock = new Stock();
+
+    // Stock data
+    private List<Stock> portfolioData = new List<Stock>
+    {
+        new Stock { StockName = "AAPL", Quantity = 50, Price = 145.30m, Change = 0.02m, Performance = new List<StockPerformance>
+            {
+                new StockPerformance { Date = new DateTime(2024, 10, 24), Open=229.98M, High=230.82M, Low=228.41M, Close=230.57M },
+new StockPerformance { Date = new DateTime(2024, 10, 23), Open=234.08M, High=235.144M, Low=227.76M, Close=230.76M },
+new StockPerformance { Date = new DateTime(2024, 10, 22), Open=233.88M, High=236.22M, Low=232.6M, Close=235.86M },
+new StockPerformance { Date = new DateTime(2024, 10, 21), Open=234.45M, High=236.85M, Low=234.45M, Close=236.48M },
+new StockPerformance { Date = new DateTime(2024, 10, 18), Open=236.18M, High=236.18M, Low=234.01M, Close=235M },
+new StockPerformance { Date = new DateTime(2024, 10, 17), Open=233.43M, High=233.85M, Low=230.52M, Close=232.15M },
+new StockPerformance { Date = new DateTime(2024, 10, 16), Open=231.6M, High=232.12M, Low=229.84M, Close=231.78M },
+new StockPerformance { Date = new DateTime(2024, 10, 15), Open=233.61M, High=237.49M, Low=232.37M, Close=233.85M },
+new StockPerformance { Date = new DateTime(2024, 10, 14), Open=228.7M, High=231.73M, Low=228.6M, Close=231.3M },
+new StockPerformance { Date = new DateTime(2024, 10, 11), Open=229.3M, High=229.41M, Low=227.34M, Close=227.55M },
+new StockPerformance { Date = new DateTime(2024, 10, 10), Open=227.78M, High=229.5M, Low=227.17M, Close=229.04M },
+new StockPerformance { Date = new DateTime(2024, 10, 09), Open=225.23M, High=229.75M, Low=224.83M, Close=229.54M },
+new StockPerformance { Date = new DateTime(2024, 10, 08), Open=224.3M, High=225.98M, Low=223.25M, Close=225.77M },
+new StockPerformance { Date = new DateTime(2024, 10, 07), Open=224.5M, High=225.69M, Low=221.33M, Close=221.69M },
+new StockPerformance { Date = new DateTime(2024, 10, 04), Open=227.9M, High=228M, Low=224.13M, Close=226.8M },
+new StockPerformance { Date = new DateTime(2024, 10, 03), Open=225.14M, High=226.805M, Low=223.32M, Close=225.67M },
+new StockPerformance { Date = new DateTime(2024, 10, 02), Open=225.89M, High=227.37M, Low=223.02M, Close=226.78M },
+new StockPerformance { Date = new DateTime(2024, 10, 01), Open=229.52M, High=229.65M, Low=223.74M, Close=226.21M },
+new StockPerformance { Date = new DateTime(2024, 09, 30), Open=230.04M, High=233M, Low=229.65M, Close=233M },
+new StockPerformance { Date = new DateTime(2024, 09, 27), Open=228.46M, High=229.52M, Low=227.3M, Close=227.79M },
+new StockPerformance { Date = new DateTime(2024, 09, 26), Open=227.3M, High=228.5M, Low=225.41M, Close=227.52M },
+new StockPerformance { Date = new DateTime(2024, 09, 25), Open=224.93M, High=227.29M, Low=224.02M, Close=226.37M },
+new StockPerformance { Date = new DateTime(2024, 09, 24), Open=228.645M, High=229.35M, Low=225.73M, Close=227.37M },
+new StockPerformance { Date = new DateTime(2024, 09, 23), Open=227.34M, High=229.45M, Low=225.81M, Close=226.47M },
+new StockPerformance { Date = new DateTime(2024, 09, 20), Open=229.97M, High=233.09M, Low=227.62M, Close=228.2M },
+new StockPerformance { Date = new DateTime(2024, 09, 19), Open=224.99M, High=229.82M, Low=224.63M, Close=228.87M },
+new StockPerformance { Date = new DateTime(2024, 09, 18), Open=217.55M, High=222.71M, Low=217.54M, Close=220.69M },
+new StockPerformance { Date = new DateTime(2024, 09, 17), Open=215.75M, High=216.9M, Low=214.5M, Close=216.79M },
+new StockPerformance { Date = new DateTime(2024, 09, 16), Open=216.54M, High=217.22M, Low=213.92M, Close=216.32M },
+new StockPerformance { Date = new DateTime(2024, 09, 13), Open=223.58M, High=224.04M, Low=221.91M, Close=222.5M },
+new StockPerformance { Date = new DateTime(2024, 09, 12), Open=222.5M, High=223.55M, Low=219.82M, Close=222.77M },
+new StockPerformance { Date = new DateTime(2024, 09, 11), Open=221.46M, High=223.09M, Low=217.89M, Close=222.66M },
+new StockPerformance { Date = new DateTime(2024, 09, 10), Open=218.92M, High=221.48M, Low=216.73M, Close=220.11M },
+new StockPerformance { Date = new DateTime(2024, 09, 09), Open=220.82M, High=221.27M, Low=216.71M, Close=220.91M },
+new StockPerformance { Date = new DateTime(2024, 09, 06), Open=223.95M, High=225.24M, Low=219.77M, Close=220.82M },
+new StockPerformance { Date = new DateTime(2024, 09, 05), Open=221.63M, High=225.48M, Low=221.52M, Close=222.38M },
+new StockPerformance { Date = new DateTime(2024, 09, 04), Open=221.66M, High=221.78M, Low=217.48M, Close=220.85M },
+new StockPerformance { Date = new DateTime(2024, 09, 03), Open=228.55M, High=229M, Low=221.17M, Close=222.77M },
+new StockPerformance { Date = new DateTime(2024, 08, 30), Open=230.19M, High=230.4M, Low=227.48M, Close=229M },
+new StockPerformance { Date = new DateTime(2024, 08, 29), Open=230.1M, High=232.92M, Low=228.88M, Close=229.79M },
+new StockPerformance { Date = new DateTime(2024, 08, 28), Open=227.92M, High=229.86M, Low=225.68M, Close=226.49M },
+new StockPerformance { Date = new DateTime(2024, 08, 27), Open=225.995M, High=228.85M, Low=224.89M, Close=228.03M },
+new StockPerformance { Date = new DateTime(2024, 08, 26), Open=226.76M, High=227.28M, Low=223.8905M, Close=227.18M },
+new StockPerformance { Date = new DateTime(2024, 08, 23), Open=225.6589M, High=228.22M, Low=224.33M, Close=226.84M },
+new StockPerformance { Date = new DateTime(2024, 08, 22), Open=227.79M, High=228.34M, Low=223.9M, Close=224.53M },
+new StockPerformance { Date = new DateTime(2024, 08, 21), Open=226.52M, High=227.98M, Low=225.05M, Close=226.4M },
+new StockPerformance { Date = new DateTime(2024, 08, 20), Open=225.77M, High=227.17M, Low=225.45M, Close=226.51M },
+new StockPerformance { Date = new DateTime(2024, 08, 19), Open=225.72M, High=225.99M, Low=223.04M, Close=225.89M },
+new StockPerformance { Date = new DateTime(2024, 08, 16), Open=223.92M, High=226.8271M, Low=223.6501M, Close=226.05M },
+new StockPerformance { Date = new DateTime(2024, 08, 15), Open=224.6M, High=225.35M, Low=222.76M, Close=224.72M },
+new StockPerformance { Date = new DateTime(2024, 08, 14), Open=220.57M, High=223.03M, Low=219.7M, Close=221.72M },
+new StockPerformance { Date = new DateTime(2024, 08, 13), Open=219.01M, High=221.89M, Low=219.01M, Close=221.27M },
+new StockPerformance { Date = new DateTime(2024, 08, 12), Open=216.07M, High=219.5099M, Low=215.6M, Close=217.53M },
+new StockPerformance { Date = new DateTime(2024, 08, 09), Open=212.1M, High=216.78M, Low=211.97M, Close=216.24M },
+new StockPerformance { Date = new DateTime(2024, 08, 08), Open=213.11M, High=214.2M, Low=208.83M, Close=213.31M },
+new StockPerformance { Date = new DateTime(2024, 08, 07), Open=206.9M, High=213.64M, Low=206.39M, Close=209.82M },
+new StockPerformance { Date = new DateTime(2024, 08, 06), Open=205.3M, High=209.99M, Low=201.07M, Close=207.23M },
+new StockPerformance { Date = new DateTime(2024, 08, 05), Open=199.09M, High=213.5M, Low=196M, Close=209.27M },
+new StockPerformance { Date = new DateTime(2024, 08, 02), Open=219.15M, High=225.6M, Low=217.71M, Close=219.86M },
+new StockPerformance { Date = new DateTime(2024, 08, 01), Open=224.37M, High=224.48M, Low=217.02M, Close=218.36M },
+new StockPerformance { Date = new DateTime(2024, 07, 31), Open=221.44M, High=223.82M, Low=220.63M, Close=222.08M },
+new StockPerformance { Date = new DateTime(2024, 07, 30), Open=219.19M, High=220.325M, Low=216.12M, Close=218.8M },
+new StockPerformance { Date = new DateTime(2024, 07, 29), Open=216.96M, High=219.3M, Low=215.75M, Close=218.24M },
+new StockPerformance { Date = new DateTime(2024, 07, 26), Open=218.7M, High=219.49M, Low=216.01M, Close=217.96M },
+            }
+        },
+        new Stock { StockName = "MSFT", Quantity = 30, Price = 299.10m, Change = 0.015m, Performance = new List<StockPerformance>
+            {
+                new StockPerformance { Date = DateTime.Now.AddDays(-4), Open = 295, High = 300, Low = 293, Close = 297 },
+                new StockPerformance { Date = DateTime.Now.AddDays(-3), Open = 297, High = 301, Low = 295, Close = 298 },
+                new StockPerformance { Date = DateTime.Now.AddDays(-2), Open = 298, High = 302, Low = 296, Close = 299.10m }
+            }
+        },
+    };
+
+    // Holds the selected stock
+    private Stock selectedStock;
+
+    // Holds the selected stock performance data
+    private List<StockPerformance> selectedStockPerformance;
+
+    // This method is called whenever a stock is selected or deselected
+    private void OnRowClickHandler(GridRowClickEventArgs args)
+    {
+        var stock = args.Item as Stock;
+
+        if (stock != null)
+        {
+            selectedStock = stock;
+            // Fetch performance data if available
+            selectedStockPerformance = stock.Performance ?? new List<StockPerformance>();
+        }
+    }
+
+    // Method to add a new stock holding
+    private void AddHolding()
+    {
+        // Ensure valid inputs (e.g., StockName is provided)
+        if (!string.IsNullOrWhiteSpace(newStock.StockName) && newStock.Quantity >= 0)
+        {
+            if (isEditMode && editingStock != null)
+            {
+                // Find the existing stock in the portfolio
+                var stockToEdit = portfolioData.FirstOrDefault(s => s.StockName == editingStock.StockName);
+
+                if (stockToEdit != null)
+                {
+                    // Update the existing stock
+                    stockToEdit.Quantity = newStock.Quantity;
+
+                    // Optionally: Remove stock if quantity is set to 0
+                    if (newStock.Quantity == 0)
+                    {
+                        portfolioData.Remove(stockToEdit);
+                    }
+                }
+            }
+            else
+            {
+                // Add the new stock if we're not in edit mode
+                portfolioData.Add(new Stock
+                    {
+                        StockName = newStock.StockName,
+                        Quantity = newStock.Quantity,
+                        Price = 0m,  // Set default price or leave it for later update
+                        Change = 0m  // Set default change or calculate later
+                    });
+            }
+
+            // Force Blazor to recognize that the list has changed
+            portfolioData = new List<Stock>(portfolioData);
+
+            // Reset the modal and new stock fields
+            newStock = new Stock();
+            editingStock = null; // Clear the editing stock
+            isEditMode = false;  // Exit edit mode
+            showAddModal = false;
+
+            // Ensure the UI is updated
+            StateHasChanged();
+        }
+    }
+
+    private void CloseWindow()
+    {
+        showAddModal = false;
+    }
+
+    private void OpenModal()
+    {
+        showAddModal = true;
+    }
+
+    private void OpenEditModal(Stock stock)
+    {
+        isEditMode = true;
+        editingStock = stock;
+        newStock = new Stock
+            {
+                StockName = stock.StockName,
+                Quantity = stock.Quantity
+            };
+        showAddModal = true;
+    }
+
+    // Stock class with additional fields for performance
+    public class Stock
+    {
+        public string StockName { get; set; }
+        public int Quantity { get; set; }
+        public decimal Price { get; set; }
+        public decimal Change { get; set; }
+        public List<StockPerformance> Performance { get; set; } // Performance data for the stock
+    }
+
+    public class StockPerformance
+    {
+        public DateTime Date { get; set; }
+        public decimal Open { get; set; }
+        public decimal Close { get; set; }
+        public decimal High { get; set; }
+        public decimal Low { get; set; }
+    }
+
+
+
+}

@@ -1,0 +1,19 @@
+﻿@page "/performance"
+
+<h3>Performance</h3>
+
+<TelerikChart>
+    <ChartSeriesItems>
+        <ChartSeries Type="ChartSeriesType.Line" Name="Stock Performance" Data="@stockPerformance">
+            <ChartSeriesLabels Visible="true" />
+        </ChartSeries>
+    </ChartSeriesItems>
+    <ChartCategoryAxes>
+        <ChartCategoryAxis Categories="@timePeriods" />
+    </ChartCategoryAxes>
+</TelerikChart>
+
+@code {
+    private List<decimal> stockPerformance = new List<decimal> { 100m, 102m, 98m, 105m, 107m };
+    private List<string> timePeriods = new List<string> { "Jan", "Feb", "Mar", "Apr", "May" };
+}
